@@ -2,7 +2,7 @@
 import { countTokens } from '../utils/tokenizer';
 import { formatChatHistory } from '../utils/chatFormatter';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const API_KEY = "AIzaSyD-E7YtkUOKHD1cqkkIt_V65cc_UX2m8Dw";
 const API_URL =
   'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
 const MAX_TOKENS = 30000;
