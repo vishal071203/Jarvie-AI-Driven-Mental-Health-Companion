@@ -2,10 +2,12 @@
 import { countTokens } from '../utils/tokenizer';
 import { formatChatHistory } from '../utils/chatFormatter';
 
-const API_KEY = "AIzaSyDZgUMuWgino6F5z-afswyymeKGT87twXQ";
+// ✅ Use env var, NOT hard-coded key
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-const API_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+// ✅ Use a supported model + v1beta endpoint
+const MODEL = 'gemini-1.5-flash';
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const MAX_TOKENS = 30000;
 
@@ -13,6 +15,10 @@ export async function generateResponse(message, chatHistory = [], userName = '')
   try {
     if (!message) {
       throw new Error('Message is required');
+    }
+
+    if (!API_KEY) {
+      throw new Error('Missing VITE_GEMINI_API_KEY. Check your .env and Netlify env vars.');
     }
 
     // Safely format history (if any)
@@ -30,7 +36,6 @@ export async function generateResponse(message, chatHistory = [], userName = '')
       trimmedHistory = '';
     }
 
-    // 🧠 Strong multilingual, name-aware system prompt
     const systemPrompt = `
 You are Jarvie, an empathetic, multilingual mental health companion speaking with ${
       userName || 'a user'
@@ -94,10 +99,6 @@ BEHAVIOUR:
         maxOutputTokens: 1024,
       },
     };
-
-    // if (!API_KEY || API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
-    //   throw new Error('Missing or invalid Gemini API key in gemini.js.');
-    // }
 
     console.log('Sending request to Gemini API:', API_URL);
 
