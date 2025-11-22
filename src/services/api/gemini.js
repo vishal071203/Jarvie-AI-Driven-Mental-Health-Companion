@@ -1,76 +1,92 @@
 // src/services/api/gemini.js
 
+// Read API key from .env
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Latest supported Gemini model
-const MODEL = 'gemini-2.5-flash';
+// Latest valid Gemini model
+const MODEL = "gemini-2.5-flash";
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 /**
- * Generate Jarvie-style response.
+ * Jarvie: Mental-Health Companion AI
+ * @param {string} message - User’s current message
+ * @param {string} context - Previous conversation text (optional)
  */
-export async function generateResponse(message, context = '', userName = '') {
+export async function generateResponse(message, context = '') {
   try {
-    if (!message) throw new Error('Message is required');
-    if (!API_KEY) throw new Error('Missing VITE_GEMINI_API_KEY.');
+    if (!API_KEY) {
+      throw new Error("Missing VITE_GEMINI_API_KEY. Check .env & Netlify variables.");
+    }
+    if (!message) throw new Error("Message is required.");
 
-    // If username is not provided, use blank (not "friend")
-    const nameUsed = userName?.trim() || '';
-
+    // 🔥 System Prompt – defines Jarvie's personality
     const systemPrompt = `
-You are **Jarvie**, an empathetic multilingual mental health companion.
+You are **Jarvie**, an empathetic AI mental-health and emotional-support companion.
 
-NAME RULES:
-1. If the app provides a user name: always use it warmly.
-   Example: "Kaise ho ${nameUsed}?"  (if userName exists)
-2. If no user name exists (empty string): 
-   - Do NOT use "friend"
-   - Do NOT invent names
-   - In Hindi, you may use "bhai", "dost"
-   - In Marathi, "मित्रा"
-   - In English, respond naturally without addressing the user by name.
+YOUR ROLE:
+- You help with feelings, emotions, stress, anxiety, loneliness, motivation and self-understanding.
+- You DO NOT give medical or professional clinical advice.
+- You ALWAYS remain kind, gentle, validating and safe.
 
 LANGUAGE RULES:
-3. Detect user language automatically.
-4. ALWAYS respond in the same language as the user's message.
-5. If user mixes languages, you may respond in mixed tone too.
-6. NEVER say you can only speak English.
+1. Detect user's language automatically.
+2. ALWAYS reply in the same language (Hindi, Marathi, English, or mixed).
+3. If user mixes languages, you may also respond in mixed language.
+4. NEVER tell them to switch languages or that you can only speak English.
 
-SPECIAL Hindi phrases:
-7. For "kya haal hai", "kya haal hai jarvie", "kya hal hai":
-   Respond kindly:
-   - "Main theek hoon ${nameUsed ? nameUsed : 'dost'}, tum batao kaise ho? 😊"
+USER NAME RULES:
+5. If user says "my name is X", "mera naam X hai", "माझं नाव X आहे":
+   - Extract the name.
+   - Remember it for this conversation.
+6. If name is known (e.g., Vishal), use it warmly in replies:
+   - "Vishal, tum kaise ho?"
+   - "Vishal, मी तुझं ऐकण्यासाठी इथे आहे."
+   - "How are you feeling today, Vishal?"
+7. If the name is NOT known, do NOT call them "friend".
+   - Instead use natural words like:
+       Hindi → "dost", "bhai"
+       Marathi → "मित्रा"
+       English → respond normally without name
 
-SPECIAL Marathi phrases:
-8. For greetings like "नमस्कार", "काय चाललंय":
-   Respond:
-   - "मी ठीक आहे ${nameUsed ? nameUsed : 'मित्रा'}, तुम्ही सांगा?"
+MENTAL-HEALTH DOMAIN RULE:
+8. If user asks anything outside emotional wellbeing (e.g., coding, maths, exam answers, programming, politics):
+   Respond with:
+   "I am designed as a mental-health and emotional-support companion, so I focus only on feelings, mood, stress, and emotional wellbeing. But I can still talk to you or help you express what you feel."
+
+GREETING RULE:
+9. If user writes "kya haal hai", "namaste", "नमस्कार", "hello", etc.:
+   Respond warmly in same language:
+   - "Main theek hoon Vishal, tum batao kaise ho? 😊"
+   - "मी ठीक आहे Vishal, तुम्ही सांगा?"
 
 STYLE:
-9. Be warm, empathetic, non-judgmental.
-10. Use short, easy-to-read replies.
-11. Do not use labels like [Jarvie]:.
+10. Be conversational, short, warm and non-judgmental.
+11. NEVER use labels like [Jarvie]: in responses.
+12. Use simple emojis when helpful 🙂 but not too many.
 `.trim();
 
-    const fullContext = [
-      systemPrompt,
-      context?.trim()
-        ? `Previous context:\n${context.trim()}`
-        : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
+    const finalPrompt = `
+${systemPrompt}
 
-    const fullPrompt = `${fullContext}\n\nUser: ${message}\nAssistant:`;
+${context ? `Previous conversation:\n${context}\n` : ''}
 
+User: ${message}
+Assistant:
+`.trim();
+
+    console.log("Gemini request:", message);
+    console.log("Using API Key?", !!API_KEY);
+    console.log("Model:", MODEL);
+
+    // Send request
     const response = await fetch(`${API_URL}?key=${API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [
           {
-            role: 'user',
-            parts: [{ text: fullPrompt }],
+            role: "user",
+            parts: [{ text: finalPrompt }],
           },
         ],
       }),
@@ -78,18 +94,21 @@ STYLE:
 
     const data = await response.json();
 
+    // Handle API errors
     if (!response.ok) {
-      throw new Error(data.error?.message || `Error: ${response.status}`);
+      console.error("Gemini API error:", data);
+      throw new Error(data.error?.message || "Gemini request failed.");
     }
 
-    const text =
+    // Extract final text
+    const output =
       data.candidates?.[0]?.content?.parts
-        ?.map((p) => p.text || '')
-        .join('') || '';
+        ?.map((p) => p.text || "")
+        .join("") || "";
 
-    return text.trim();
-  } catch (error) {
-    console.error('Error generating response:', error);
-    throw new Error(error.message);
+    return output.trim();
+  } catch (err) {
+    console.error("Error generating response:", err);
+    return "Sorry, I'm having trouble right now. Please try again in a moment.";
   }
 }
