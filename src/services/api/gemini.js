@@ -6,7 +6,7 @@ import { formatChatHistory } from '../utils/chatFormatter';
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 // ✅ Use a supported model + v1beta endpoint
-const MODEL = 'gemini-1.5-flash';
+const MODEL = 'gemini-2.5-flash';
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const MAX_TOKENS = 30000;
