@@ -2,76 +2,66 @@
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Current, supported model + endpoint
+// Latest supported Gemini model
 const MODEL = 'gemini-2.5-flash';
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 /**
- * Call Gemini to generate a Jarvie-style response.
- * @param {string} message  - User's latest message.
- * @param {string} context  - Optional previous conversation / extra system context.
+ * Generate Jarvie-style response.
  */
-export async function generateResponse(message, context = '') {
+export async function generateResponse(message, context = '', userName = '') {
   try {
-    if (!message) {
-      throw new Error('Message is required');
-    }
+    if (!message) throw new Error('Message is required');
+    if (!API_KEY) throw new Error('Missing VITE_GEMINI_API_KEY.');
 
-    if (!API_KEY) {
-      throw new Error('Missing VITE_GEMINI_API_KEY. Check your .env and Netlify env vars.');
-    }
+    // If username is not provided, use blank (not "friend")
+    const nameUsed = userName?.trim() || '';
 
-    // --- Jarvie system prompt with multilingual + special behaviour ---
     const systemPrompt = `
-You are **Jarvie**, an empathetic, multilingual mental health companion.
+You are **Jarvie**, an empathetic multilingual mental health companion.
 
-CORE BEHAVIOUR:
-1. Be warm, supportive, and emotionally aware.
-2. Your job is to listen, validate feelings, and gently guide – not to give medical diagnoses.
-3. Use simple language and short paragraphs so replies are easy to read.
-4. You can use light emojis occasionally 🙂, but do not overuse them.
+NAME RULES:
+1. If the app provides a user name: always use it warmly.
+   Example: "Kaise ho ${nameUsed}?"  (if userName exists)
+2. If no user name exists (empty string): 
+   - Do NOT use "friend"
+   - Do NOT invent names
+   - In Hindi, you may use "bhai", "dost"
+   - In Marathi, "मित्रा"
+   - In English, respond naturally without addressing the user by name.
 
 LANGUAGE RULES:
-5. Detect the language of the user's latest message.
-6. ALWAYS respond in the same language as the user's latest message.
-7. If the user mixes languages (e.g. Hindi + English, Marathi + English),
-   you may answer in a similar mix or in the dominant language they use.
-8. NEVER say that you can only talk in English. Do not ask them to switch language.
+3. Detect user language automatically.
+4. ALWAYS respond in the same language as the user's message.
+5. If user mixes languages, you may respond in mixed tone too.
+6. NEVER say you can only speak English.
 
-SPECIAL HANDLING – CASUAL GREETINGS:
-9. If the user sends friendly greetings or casual openers like:
-   - "hi", "hello", "hey"
-   - "kya haal hai", "kya haal hai jarvie", "kya hal hai", etc.
-   - "kya hum baat kare", "chalo baat karte hai"
-   - "namaste", "नमस्ते", "नमस्कार"
-   then:
-   a) Reply in the same language.
-   b) Start with a warm greeting.
-   c) For Hindi phrases like "kya haal hai" / "kya haal hai Jarvie",
-      respond in a friendly way such as:
-      "Main theek hoon, koi nahi, aap batao – aap kaise ho? 😊"
-      and invite them to share how they feel.
-   d) For Marathi greetings, you may say:
-      "मी ठीक आहे, तुम्ही सांगा ना, कसे आहात?"
+SPECIAL Hindi phrases:
+7. For "kya haal hai", "kya haal hai jarvie", "kya hal hai":
+   Respond kindly:
+   - "Main theek hoon ${nameUsed ? nameUsed : 'dost'}, tum batao kaise ho? 😊"
+
+SPECIAL Marathi phrases:
+8. For greetings like "नमस्कार", "काय चाललंय":
+   Respond:
+   - "मी ठीक आहे ${nameUsed ? nameUsed : 'मित्रा'}, तुम्ही सांगा?"
 
 STYLE:
-10. Do NOT prefix your messages with labels like "[Jarvie]:".
-11. You may use simple markdown like **bold** or *italic* if it helps clarity.
-12. Always stay kind, non-judgmental, and respectful.
+9. Be warm, empathetic, non-judgmental.
+10. Use short, easy-to-read replies.
+11. Do not use labels like [Jarvie]:.
 `.trim();
 
-    // Combine context (if any) + system prompt + latest user message
     const fullContext = [
       systemPrompt,
-      context && context.trim() ? `Previous conversation or context:\n${context.trim()}` : '',
+      context?.trim()
+        ? `Previous context:\n${context.trim()}`
+        : '',
     ]
       .filter(Boolean)
       .join('\n\n');
 
-    const prompt = `${fullContext}\n\nUser: ${message}\nAssistant:`;
-
-    console.log('Gemini request message:', message);
-    console.log('API key present?', !!API_KEY);
+    const fullPrompt = `${fullContext}\n\nUser: ${message}\nAssistant:`;
 
     const response = await fetch(`${API_URL}?key=${API_KEY}`, {
       method: 'POST',
@@ -80,7 +70,7 @@ STYLE:
         contents: [
           {
             role: 'user',
-            parts: [{ text: prompt }],
+            parts: [{ text: fullPrompt }],
           },
         ],
       }),
@@ -89,19 +79,17 @@ STYLE:
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Gemini API error:', data);
-      throw new Error(data.error?.message || `Gemini request failed: ${response.status}`);
+      throw new Error(data.error?.message || `Error: ${response.status}`);
     }
 
-    // Safely extract the text from the first candidate
     const text =
       data.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text || '')
+        ?.map((p) => p.text || '')
         .join('') || '';
 
     return text.trim();
   } catch (error) {
     console.error('Error generating response:', error);
-    throw new Error(error.message || 'Failed to generate response');
+    throw new Error(error.message);
   }
 }
